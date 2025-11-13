@@ -1,0 +1,5 @@
+{
+  "name": "Núcleo",
+  "description": "An application to manage materials and tools in operational vehicles, featuring an administrative dashboard to monitor stock levels across the fleet.",
+  "requestFramePermissions": []
+}
