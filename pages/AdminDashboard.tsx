@@ -118,7 +118,7 @@ const VehicleCard: React.FC<{ vehicle: Vehicle; users: User[], onEdit: (vehicle:
 };
 
 const NotificationPanel: React.FC<{ notifications: Notification[]; onClose?: () => void }> = ({ notifications, onClose }) => {
-    const sortedNotifications = [...notifications].sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+    const sortedNotifications = [...notifications].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     const getIcon = (notif: Notification) => {
         switch (notif.type) {
@@ -155,7 +155,7 @@ const NotificationPanel: React.FC<{ notifications: Notification[]; onClose?: () 
                             <div className="flex-1">
                                 <p className="text-sm text-dark">{notif.message}</p>
                                 <p className="text-xs text-slate-500 mt-1">
-                                    <span className="font-medium">{notif.vehicleName}</span> - {notif.timestamp.toDate().toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' })}
+                                    <span className="font-medium">{notif.vehicleName}</span> - {new Date(notif.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' })}
                                 </p>
                             </div>
                         </Link>
@@ -562,7 +562,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                                             <div className="flex-1">
                                                 <p className={`text-sm font-medium ${notif.type === 'alert' ? 'text-red-800' : (notif.type === 'request' ? 'text-blue-800' : 'text-dark')}`}>{notif.message}</p>
                                                 <p className="text-xs text-slate-500 mt-1">
-                                                    {notif.vehicleName} - {notif.timestamp.toDate().toLocaleString()}
+                                                    {notif.vehicleName} - {new Date(notif.timestamp).toLocaleString()}
                                                 </p>
                                                 {notif.type === 'request' && !notif.read && (
                                                     <button 

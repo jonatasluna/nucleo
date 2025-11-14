@@ -1,5 +1,3 @@
-import { Timestamp } from 'firebase/firestore';
-
 export interface Material {
   id: string;
   name: string;
@@ -38,14 +36,14 @@ export interface Vehicle {
   tools: Tool[];
   type: VehicleType;
   defects: string[];
+  created_at?: string;
 }
 
 export interface User {
   id:string;
-  username: string;
+  username: string; // Matricula
   name: string;
   email: string;
-  password?: string; // For simulation purposes
   role: 'admin' | 'operator';
   assignedVehicleId?: string; // Only for operators
 }
@@ -55,9 +53,10 @@ export interface Notification {
   vehicleId: string;
   vehicleName: string;
   message: string;
-  timestamp: Timestamp;
+  timestamp: string; // Supabase returns ISO string
   type: 'update' | 'alert' | 'request';
   read: boolean;
   itemType?: 'material' | 'tool' | 'vehicle';
   userId?: string; // For access requests
+  created_at?: string;
 }

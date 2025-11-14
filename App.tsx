@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, doc, getDoc, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
-import { auth, db } from './firebaseConfig';
-import { Vehicle, User, Notification, VehicleType, MasterMaterial, MasterTool } from './types';
+import { User, Vehicle, Notification, VehicleType, MasterMaterial, MasterTool } from './types';
+import { supabase } from './supabaseClient';
+import { AuthChangeEvent, Session } from '@supabase/supabase-js';
+
 import AdminDashboard from './pages/AdminDashboard';
 import VehicleDetail from './pages/VehicleDetail';
 import Login from './pages/Login';
@@ -19,87 +18,150 @@ const App: React.FC = () => {
     const [masterMaterials, setMasterMaterials] = useState<MasterMaterial[]>([]);
     const [masterTools, setMasterTools] = useState<MasterTool[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [session, setSession] = useState<Session | null>(null);
 
     useEffect(() => {
-        const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                const userDocRef = doc(db, 'users', user.uid);
-                const userDocSnap = await getDoc(userDocRef);
-                if (userDocSnap.exists()) {
-                    setCurrentUser({ id: userDocSnap.id, ...userDocSnap.data() } as User);
-                } else {
-                    // This could be a new registration, App.tsx will handle creating the user doc
+        const fetchInitialData = async () => {
+            setIsLoading(true);
+            try {
+                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                if (sessionError) throw sessionError;
+
+                if (sessionData.session) {
+                    await fetchAllData(sessionData.session);
                 }
-            } else {
-                setCurrentUser(null);
+            } catch (error) {
+                console.error("Error fetching initial data: ", error);
+            } finally {
+                setIsLoading(false);
             }
-            setIsLoading(false);
-        });
+        };
 
-        // Setup Firestore listeners
-        const unsubVehicles = onSnapshot(collection(db, 'vehicles'), (snapshot) => {
-            const vehiclesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vehicle));
-            setVehicles(vehiclesData);
-        });
+        fetchInitialData();
 
-        const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-            const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-            setUsers(usersData);
-        });
-
-        const unsubMaterials = onSnapshot(collection(db, 'masterMaterials'), (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MasterMaterial));
-            setMasterMaterials(data);
-        });
-
-        const unsubTools = onSnapshot(collection(db, 'masterTools'), (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MasterTool));
-            setMasterTools(data);
-        });
-        
-        const unsubNotifications = onSnapshot(collection(db, 'notifications'), (snapshot) => {
-             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-             setNotifications(data);
-        });
-        
-        const unsubPermissions = onSnapshot(collection(db, 'permissions'), (snapshot) => {
-             let permissionsData: Record<string, boolean> = {};
-             snapshot.docs.forEach(doc => {
-                 permissionsData[doc.id] = doc.data().canEdit;
-             });
-             setUserPermissions(permissionsData);
-        });
-
+        const { data: authListener } = supabase.auth.onAuthStateChange(
+            async (event: AuthChangeEvent, session: Session | null) => {
+                setSession(session);
+                if (event === 'SIGNED_IN' && session) {
+                    await fetchAllData(session);
+                }
+                if (event === 'SIGNED_OUT') {
+                    setCurrentUser(null);
+                    setVehicles([]);
+                    setUsers([]);
+                    setNotifications([]);
+                    // etc.
+                }
+            }
+        );
 
         return () => {
-            unsubscribeAuth();
-            unsubVehicles();
-            unsubUsers();
-            unsubMaterials();
-            unsubTools();
-            unsubNotifications();
-            unsubPermissions();
+            authListener.subscription.unsubscribe();
         };
     }, []);
     
+    useEffect(() => {
+        // Setup realtime subscriptions
+        const channels = supabase.channel('db-changes');
+        
+        channels
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, payload => {
+                console.log('Change received for vehicles!', payload);
+                fetchVehicles();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, payload => {
+                console.log('Change received for users!', payload);
+                fetchUsers();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, payload => {
+                 console.log('Change received for notifications!', payload);
+                fetchNotifications();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'master_materials' }, payload => {
+                 console.log('Change received for master_materials!', payload);
+                fetchMasterMaterials();
+            })
+             .on('postgres_changes', { event: '*', schema: 'public', table: 'master_tools' }, payload => {
+                 console.log('Change received for master_tools!', payload);
+                fetchMasterTools();
+            })
+            .subscribe();
 
-    const logActivity = async (log: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
-        const newNotification = {
-            ...log,
-            timestamp: Timestamp.now(),
-            read: false,
+        return () => {
+            supabase.removeChannel(channels);
         };
-        await addDoc(collection(db, 'notifications'), newNotification);
+    }, []);
+
+    const fetchVehicles = async () => {
+        const { data, error } = await supabase.from('vehicles').select('*');
+        if (error) console.error('Error fetching vehicles', error);
+        else setVehicles(data || []);
+    };
+    const fetchUsers = async () => {
+        const { data, error } = await supabase.from('users').select('*');
+        if (error) console.error('Error fetching users', error);
+        else setUsers(data || []);
+    };
+    const fetchNotifications = async () => {
+        const { data, error } = await supabase.from('notifications').select('*').order('timestamp', { ascending: false });
+        if (error) console.error('Error fetching notifications', error);
+        else setNotifications(data || []);
+    };
+    const fetchMasterMaterials = async () => {
+        const { data, error } = await supabase.from('master_materials').select('*');
+        if (error) console.error('Error fetching master materials', error);
+        else setMasterMaterials(data || []);
+    };
+    const fetchMasterTools = async () => {
+        const { data, error } = await supabase.from('master_tools').select('*');
+        if (error) console.error('Error fetching master tools', error);
+        else setMasterTools(data || []);
+    };
+
+    const fetchAllData = async (session: Session) => {
+        if (!session) return;
+        setIsLoading(true);
+        try {
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+            if (userError) throw userError;
+            
+            setCurrentUser(userData);
+
+            await Promise.all([
+                fetchVehicles(),
+                fetchUsers(),
+                fetchNotifications(),
+                fetchMasterMaterials(),
+                fetchMasterTools()
+            ]);
+            
+        } catch (error) {
+            console.error("Error fetching all data: ", error);
+        } finally {
+            setIsLoading(false);
+        }
     };
     
+    const logActivity = async (log: Omit<Notification, 'id' | 'timestamp' | 'read' | 'created_at'>) => {
+        const newNotification = {
+            ...log,
+            timestamp: new Date().toISOString(),
+            read: false,
+        };
+        const { error } = await supabase.from('notifications').insert([newNotification]);
+        if (error) console.error("Error logging activity: ", error);
+    };
+
     const handleMarkAllAsRead = async () => {
-        const batch = writeBatch(db);
-        const unreadNotifs = notifications.filter(n => !n.read);
-        unreadNotifs.forEach(notif => {
-            const notifRef = doc(db, 'notifications', notif.id);
-            batch.update(notifRef, { read: true });
-        });
-        await batch.commit();
+        const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+        if (unreadIds.length > 0) {
+            const { error } = await supabase.from('notifications').update({ read: true }).in('id', unreadIds);
+            if (error) console.error("Error marking all as read: ", error);
+        }
     };
 
     const handleRequestAccess = async (userId: string, vehicleId: string) => {
@@ -120,79 +182,80 @@ const App: React.FC = () => {
         const notif = notifications.find(n => n.id === notificationId);
         if (notif && notif.userId) {
             await handleAssignVehicleToUser(notif.userId, notif.vehicleId);
-            await updateDoc(doc(db, 'notifications', notificationId), {
-                read: true,
-                type: 'update',
-                message: `Acesso de ${users.find(u => u.id === notif.userId)?.name} à ${notif.vehicleName} aprovado.`
-            });
+            
+            const { error } = await supabase.from('notifications').update({
+                 read: true,
+                 type: 'update',
+                 message: `Acesso de ${users.find(u => u.id === notif.userId)?.name} à ${notif.vehicleName} aprovado.`
+            }).eq('id', notificationId);
+            if (error) console.error("Error approving access: ", error);
         }
     };
-
-    const handleUpdateVehicle = async (updatedVehicle: Vehicle) => {
-        const vehicleRef = doc(db, 'vehicles', updatedVehicle.id);
-        await setDoc(vehicleRef, updatedVehicle, { merge: true });
-    };
     
+    const handleUpdateVehicle = async (updatedVehicle: Vehicle) => {
+        const { error } = await supabase.from('vehicles').update(updatedVehicle).eq('id', updatedVehicle.id);
+        if (error) console.error("Error updating vehicle: ", error);
+    };
+
     const handleAddVehicle = async (vehicleData: { name: string; plate: string; type: VehicleType }) => {
-        await addDoc(collection(db, 'vehicles'), {
+        const newVehicle: Omit<Vehicle, 'id' | 'created_at'> = {
             ...vehicleData,
             operatorIds: [],
             materials: [],
             tools: [],
             defects: [],
-        });
+        };
+        const { error } = await supabase.from('vehicles').insert([newVehicle]);
+        if (error) console.error("Error adding vehicle: ", error);
     };
 
     const handleEditVehicle = async (vehicleData: Pick<Vehicle, 'id' | 'name' | 'plate' | 'type'>) => {
-        const vehicleRef = doc(db, 'vehicles', vehicleData.id);
-        await updateDoc(vehicleRef, {
-            name: vehicleData.name,
-            plate: vehicleData.plate,
-            type: vehicleData.type
-        });
+        const { error } = await supabase.from('vehicles').update({ name: vehicleData.name, plate: vehicleData.plate, type: vehicleData.type }).eq('id', vehicleData.id);
+        if (error) console.error("Error editing vehicle: ", error);
     };
 
     const handleAssignVehicleToUser = async (userId: string, newVehicleId: string | null) => {
-        const userToUpdate = users.find(u => u.id === userId);
-        if (!userToUpdate) return;
-        const oldVehicleId = userToUpdate.assignedVehicleId;
-        if (oldVehicleId === newVehicleId) return;
-
-        const batch = writeBatch(db);
-
-        // Update user's assigned vehicle
-        const userRef = doc(db, 'users', userId);
-        batch.update(userRef, { assignedVehicleId: newVehicleId || null });
-
-        // Remove from old vehicle's operators
-        if (oldVehicleId) {
-            const oldVehicleRef = doc(db, 'vehicles', oldVehicleId);
-            const oldVehicle = vehicles.find(v => v.id === oldVehicleId);
-            if(oldVehicle) {
-                batch.update(oldVehicleRef, { operatorIds: oldVehicle.operatorIds.filter(id => id !== userId) });
-            }
+        // This is complex and needs a transaction, best handled by a Supabase Function (Edge Function)
+        // For client-side simulation:
+        // 1. Update user's assignedVehicleId
+        const { error: userUpdateError } = await supabase.from('users').update({ assignedVehicleId: newVehicleId }).eq('id', userId);
+        if (userUpdateError) {
+            console.error("Error assigning vehicle to user: ", userUpdateError);
+            return;
         }
 
-        // Add to new vehicle's operators
+        // 2. Remove user from all vehicle operator arrays
+        const { data: allVehicles, error: fetchError } = await supabase.from('vehicles').select('id, operatorIds');
+        if(fetchError) { console.error("Error fetching vehicles for assignment: ", fetchError); return; }
+
+        for (const v of allVehicles || []) {
+            if (v.operatorIds.includes(userId)) {
+                const updatedOperatorIds = v.operatorIds.filter(id => id !== userId);
+                const { error: vehicleUpdateError } = await supabase.from('vehicles').update({ operatorIds: updatedOperatorIds }).eq('id', v.id);
+                if (vehicleUpdateError) console.error("Error removing user from old vehicle: ", vehicleUpdateError);
+            }
+        }
+        
+        // 3. Add user to the new vehicle's operator array
         if (newVehicleId) {
-            const newVehicleRef = doc(db, 'vehicles', newVehicleId);
-            const newVehicle = vehicles.find(v => v.id === newVehicleId);
-             if (newVehicle && newVehicle.operatorIds.length >= 3 && !newVehicle.operatorIds.includes(userId)) {
-                alert(`Não é possível atribuir a "${newVehicle.name}". A viatura já tem 3 operadores.`);
-                return;
-            }
-            if(newVehicle && !newVehicle.operatorIds.includes(userId)) {
-                batch.update(newVehicleRef, { operatorIds: [...newVehicle.operatorIds, userId] });
+            const targetVehicle = vehicles.find(v => v.id === newVehicleId);
+            if (targetVehicle && targetVehicle.operatorIds.length < 3) {
+                 const updatedOperatorIds = [...targetVehicle.operatorIds, userId];
+                 const { error: vehicleUpdateError } = await supabase.from('vehicles').update({ operatorIds: updatedOperatorIds }).eq('id', newVehicleId);
+                 if (vehicleUpdateError) console.error("Error adding user to new vehicle: ", vehicleUpdateError);
+            } else if (targetVehicle) {
+                alert(`Não é possível atribuir a "${targetVehicle.name}". A viatura já tem 3 operadores.`);
+                // Revert user assignment
+                 await supabase.from('users').update({ assignedVehicleId: null }).eq('id', userId);
             }
         }
-        await batch.commit();
     };
-
+    
     const handleReportDefect = async (vehicleId: string, defect: string) => {
         const vehicle = vehicles.find(v => v.id === vehicleId);
         if (vehicle && currentUser) {
-            const updatedVehicle = { ...vehicle, defects: [...vehicle.defects, defect] };
-            await handleUpdateVehicle(updatedVehicle);
+            const updatedDefects = [...vehicle.defects, defect];
+            await handleUpdateVehicle({ ...vehicle, defects: updatedDefects });
             await logActivity({
                 type: 'alert',
                 message: `${currentUser.name} relatou uma avaria: "${defect}"`,
@@ -208,8 +271,7 @@ const App: React.FC = () => {
         if (vehicle && currentUser) {
             const defectDescription = vehicle.defects[defectIndex];
             const updatedDefects = vehicle.defects.filter((_, index) => index !== defectIndex);
-            const updatedVehicle = { ...vehicle, defects: updatedDefects };
-            await handleUpdateVehicle(updatedVehicle);
+            await handleUpdateVehicle({ ...vehicle, defects: updatedDefects });
             await logActivity({
                 type: 'update',
                 message: `${currentUser.name} resolveu a avaria: "${defectDescription}"`,
@@ -219,53 +281,44 @@ const App: React.FC = () => {
             });
         }
     };
-    
-    const handleLogout = async () => {
-        await signOut(auth);
-    };
 
     const handlePermissionChange = async (userId: string, canEdit: boolean) => {
-        const permissionRef = doc(db, 'permissions', userId);
-        await setDoc(permissionRef, { canEdit });
+        // Note: Permissions are not stored in the DB in this simplified schema.
+        // This remains a client-side simulation. For a real app, you'd need a permissions table or RLS policies.
+        setUserPermissions(prev => ({ ...prev, [userId]: canEdit }));
     };
 
-    // Master Catalog Handlers
     const handleAddMasterMaterial = async (data: Omit<MasterMaterial, 'id'>) => {
-        await addDoc(collection(db, 'masterMaterials'), data);
+        const { error } = await supabase.from('master_materials').insert([data]);
+        if (error) console.error("Error adding master material: ", error);
     };
     const handleEditMasterMaterial = async (data: MasterMaterial) => {
-        await setDoc(doc(db, 'masterMaterials', data.id), data, { merge: true });
+        const { error } = await supabase.from('master_materials').update({ name: data.name, unit: data.unit }).eq('id', data.id);
+        if (error) console.error("Error editing master material: ", error);
     };
     const handleDeleteMasterMaterial = async (id: string) => {
-        await deleteDoc(doc(db, 'masterMaterials', id));
+        const { error } = await supabase.from('master_materials').delete().eq('id', id);
+        if (error) console.error("Error deleting master material: ", error);
     };
     const handleAddMasterTool = async (data: Omit<MasterTool, 'id'>) => {
-        await addDoc(collection(db, 'masterTools'), data);
+        const { error } = await supabase.from('master_tools').insert([data]);
+        if (error) console.error("Error adding master tool: ", error);
     };
     const handleEditMasterTool = async (data: MasterTool) => {
-        await setDoc(doc(db, 'masterTools', data.id), data, { merge: true });
+        const { error } = await supabase.from('master_tools').update({ name: data.name }).eq('id', data.id);
+        if (error) console.error("Error editing master tool: ", error);
     };
     const handleDeleteMasterTool = async (id: string) => {
-        await deleteDoc(doc(db, 'masterTools', id));
+        const { error } = await supabase.from('master_tools').delete().eq('id', id);
+        if (error) console.error("Error deleting master tool: ", error);
     };
 
     if (isLoading) {
-        return <div className="flex h-screen items-center justify-center">Carregando...</div>;
+        return <div className="flex h-screen items-center justify-center font-bold text-lg text-primary">Carregando...</div>;
     }
-    
-    if (!auth.currentUser) {
-        return (
-            <HashRouter>
-                <Routes>
-                    <Route path="/login" element={<Login />} />
-                    <Route path="*" element={<Navigate to="/login" />} />
-                </Routes>
-            </HashRouter>
-        );
-    }
-    
-    if (!currentUser) {
-         return <div className="flex h-screen items-center justify-center">Verificando dados do usuário...</div>;
+
+    if (!session || !currentUser) {
+        return <Login />;
     }
 
     return (
@@ -277,9 +330,9 @@ const App: React.FC = () => {
                             <AdminDashboard 
                                 vehicles={vehicles} 
                                 users={users}
-                                permissions={userPermissions}
+                                permissions={userPermissions} // Still mock
                                 onPermissionChange={handlePermissionChange}
-                                onLogout={handleLogout}
+                                onLogout={() => supabase.auth.signOut()}
                                 currentUser={currentUser}
                                 notifications={notifications}
                                 onAssignVehicle={handleAssignVehicleToUser}
@@ -304,7 +357,7 @@ const App: React.FC = () => {
                                 logActivity={logActivity}
                                 notifications={notifications}
                                 canEdit={true} // Admin can always edit
-                                onLogout={handleLogout}
+                                onLogout={() => supabase.auth.signOut()}
                                 currentUser={currentUser}
                                 users={users}
                                 masterMaterials={masterMaterials}
@@ -323,7 +376,7 @@ const App: React.FC = () => {
                                 vehicles={vehicles}
                                 currentUser={currentUser}
                                 onSelectVehicle={handleAssignVehicleToUser}
-                                onLogout={handleLogout}
+                                onLogout={() => supabase.auth.signOut()}
                                 users={users}
                             />
                         }/>
@@ -333,8 +386,8 @@ const App: React.FC = () => {
                                 updateVehicle={handleUpdateVehicle}
                                 logActivity={logActivity}
                                 notifications={notifications}
-                                canEdit={userPermissions[currentUser.id] !== false} // Default to true unless explicitly set to false
-                                onLogout={handleLogout}
+                                canEdit={userPermissions[currentUser.id] !== false} // Mock
+                                onLogout={() => supabase.auth.signOut()}
                                 currentUser={currentUser}
                                 users={users}
                                 masterMaterials={masterMaterials}

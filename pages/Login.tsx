@@ -1,14 +1,5 @@
 import React, { useState } from 'react';
-import { 
-    createUserWithEmailAndPassword, 
-    signInWithEmailAndPassword, 
-    sendPasswordResetEmail,
-    updateProfile,
-    browserLocalPersistence,
-    setPersistence
-} from 'firebase/auth';
-import { doc, setDoc, query, collection, where, getDocs } from 'firebase/firestore';
-import { auth, db } from '../firebaseConfig';
+import { supabase } from '../supabaseClient';
 import { UserIcon, LockClosedIcon, EnvelopeIcon } from '../components/icons';
 
 type View = 'login' | 'register' | 'forgotPassword';
@@ -22,14 +13,13 @@ const Login: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     
     // Login states
-    const [loginMatricula, setLoginMatricula] = useState('');
-    const [loginPassword, setLoginPassword] = useState('');
-    const [loginAttempts, setLoginAttempts] = useState(0);
-
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    
     // Register states
     const [regName, setRegName] = useState('');
     const [regMatricula, setRegMatricula] = useState('');
-    const [regUserEmail, setRegUserEmail] = useState('');
+    const [regEmail, setRegEmail] = useState('');
     const [regPassword, setRegPassword] = useState('');
     const [regConfirmPassword, setRegConfirmPassword] = useState('');
     
@@ -40,23 +30,17 @@ const Login: React.FC = () => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
-        try {
-            const emailForAuth = `${loginMatricula}@nucleo.app`;
-            await setPersistence(auth, browserLocalPersistence);
-            await signInWithEmailAndPassword(auth, emailForAuth, loginPassword);
-            // Navigation will be handled by the onAuthStateChanged listener in App.tsx
-        } catch (err: any) {
-            const newAttemptCount = loginAttempts + 1;
-            setLoginAttempts(newAttemptCount);
-            if (newAttemptCount >= 3) {
-                 setError('Matrícula ou senha inválida. Considere redefinir sua senha.');
-            } else {
-                 setError('Matrícula ou senha inválida.');
-            }
-            console.error(err);
-        } finally {
-            setIsLoading(false);
+
+        const { error } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: password,
+        });
+
+        if (error) {
+            setError(error.message === 'Invalid login credentials' ? 'E-mail ou senha inválidos.' : error.message);
         }
+        // onAuthStateChange in App.tsx will handle navigation
+        setIsLoading(false);
     };
 
     const handleRegisterSubmit = async (e: React.FormEvent) => {
@@ -70,58 +54,41 @@ const Login: React.FC = () => {
             return;
         }
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(regUserEmail)) {
-            setError('Por favor, insira um endereço de e-mail válido.');
-            return;
-        }
-
         if (regPassword !== regConfirmPassword) {
             setError('As senhas não coincidem.');
             return;
         }
         setIsLoading(true);
         
-        try {
-            const emailForAuth = `${regMatricula}@nucleo.app`;
-            const userCredential = await createUserWithEmailAndPassword(auth, emailForAuth, regPassword);
-            const user = userCredential.user;
+        const { data, error } = await supabase.auth.signUp({
+            email: regEmail,
+            password: regPassword,
+            options: {
+                data: {
+                    name: regName,
+                    username: regMatricula,
+                    role: 'operator' // Default role
+                }
+            }
+        });
 
-            await updateProfile(user, { displayName: regName });
-            
-            await setDoc(doc(db, 'users', user.uid), {
-                name: regName,
-                username: regMatricula,
-                email: regUserEmail,
-                role: 'operator',
-                assignedVehicleId: null,
-            });
-
-            setMessage('Cadastro realizado com sucesso! Você já pode fazer o login.');
-            
-            setTimeout(() => {
+        if (error) {
+            setError(error.message);
+        } else if (data.user) {
+             setMessage('Cadastro realizado! Por favor, verifique seu e-mail para confirmar sua conta.');
+             // Clear form after a delay
+             setTimeout(() => {
                 setRegName('');
                 setRegMatricula('');
-                setRegUserEmail('');
+                setRegEmail('');
                 setRegPassword('');
                 setRegConfirmPassword('');
                 setView('login');
                 setMessage('');
                 setError('');
-            }, 2000);
-
-        } catch (err: any) {
-             if (err.code === 'auth/email-already-in-use') {
-                setError('Esta matrícula já está em uso.');
-            } else if (err.code === 'auth/weak-password') {
-                setError('A senha deve ter no mínimo 6 caracteres.');
-            } else {
-                setError('Ocorreu um erro ao registrar. Tente novamente.');
-            }
-            console.error(err);
-        } finally {
-            setIsLoading(false);
+            }, 3000);
         }
+        setIsLoading(false);
     };
     
     const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
@@ -129,36 +96,23 @@ const Login: React.FC = () => {
         setError('');
         setMessage('');
         setIsLoading(true);
-        try {
-            // Find the user's matricula based on their email to construct the auth email
-            const q = query(collection(db, "users"), where("email", "==", forgotEmail));
-            const querySnapshot = await getDocs(q);
-            
-            if (querySnapshot.empty) {
-                setError("Nenhuma conta encontrada com este endereço de e-mail.");
-                setIsLoading(false);
-                return;
-            }
+        
+        const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+            redirectTo: window.location.origin, // URL to redirect to after password reset
+        });
 
-            const userData = querySnapshot.docs[0].data();
-            const matricula = userData.username;
-            const emailForAuth = `${matricula}@nucleo.app`;
-            
-            await sendPasswordResetEmail(auth, emailForAuth);
-            setMessage('E-mail de redefinição de senha enviado! Verifique sua caixa de entrada.');
-        } catch (error) {
-            console.error("Error sending password reset email", error);
-            setError('Não foi possível enviar o e-mail. Tente novamente.');
-        } finally {
-            setIsLoading(false);
+        if (error) {
+            setError(error.message);
+        } else {
+            setMessage('Se uma conta com este e-mail existir, um link de redefinição foi enviado.');
         }
+        setIsLoading(false);
     };
     
     const switchView = (newView: View) => {
         setView(newView);
         setError('');
         setMessage('');
-        setLoginAttempts(0);
     }
     
     const renderForm = () => {
@@ -177,7 +131,7 @@ const Login: React.FC = () => {
                             </div>
                             <div className="relative">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3"><EnvelopeIcon className="w-5 h-5 text-slate-400" /></span>
-                                <input type="email" value={regUserEmail} onChange={(e) => setRegUserEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 text-gray-800 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="E-mail" required />
+                                <input type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 text-gray-800 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="E-mail" required />
                             </div>
                             <div className="relative">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3"><UserIcon className="w-5 h-5 text-slate-400" /></span>
@@ -232,12 +186,12 @@ const Login: React.FC = () => {
                         </div>
                         <form onSubmit={handleLoginSubmit} className="space-y-6">
                             <div className="relative">
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3"><UserIcon className="w-5 h-5 text-slate-400" /></span>
-                                <input type="text" value={loginMatricula} onChange={(e) => setLoginMatricula(e.target.value)} className="w-full pl-10 pr-4 py-3 text-gray-800 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Matrícula" required />
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3"><EnvelopeIcon className="w-5 h-5 text-slate-400" /></span>
+                                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 text-gray-800 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="E-mail" required />
                             </div>
                             <div className="relative">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3"><LockClosedIcon className="w-5 h-5 text-slate-400" /></span>
-                                <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className="w-full pl-10 pr-4 py-3 text-gray-800 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Senha" required />
+                                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-10 pr-4 py-3 text-gray-800 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Senha" required />
                             </div>
                              <div className="text-right text-sm">
                                 <button type="button" onClick={() => switchView('forgotPassword')} className="font-medium text-primary hover:underline focus:outline-none">
@@ -259,13 +213,15 @@ const Login: React.FC = () => {
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-slate-100 p-4">
-            <div className="w-full max-w-sm p-8 space-y-6 bg-white rounded-xl shadow-lg">
-                {(error || message) && (
-                    <div className={`text-center text-sm p-3 rounded-md ${error ? 'text-red-500 bg-red-100' : 'text-green-500 bg-green-100'}`}>
-                        {error || message}
-                    </div>
-                )}
-                {renderForm()}
+             <div className="w-full max-w-sm mx-auto overflow-hidden bg-white rounded-lg shadow-md">
+                <div className="p-8">
+                    {(error || message) && (
+                        <div className={`text-center text-sm p-3 rounded-md mb-6 ${error ? 'text-red-700 bg-red-100' : 'text-green-700 bg-green-100'}`}>
+                            {error || message}
+                        </div>
+                    )}
+                    {renderForm()}
+                </div>
             </div>
         </div>
     );

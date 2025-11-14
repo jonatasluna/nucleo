@@ -1,29 +1,12 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
+import { User } from './types';
 
-// Cole aqui as credenciais do seu projeto Firebase.
-// Você pode encontrar essas informações no console do Firebase,
-// nas configurações do seu projeto (Project Settings > General).
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
+// IMPORTANT: Replace with your project's URL and Anon Key
+const supabaseUrl = 'YOUR_SUPABASE_URL';
+const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
 
-
-// Validação para garantir que as credenciais foram substituídas.
-if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-  console.error("Configuração do Firebase está incompleta. Substitua os valores de placeholder em 'firebaseConfig.ts' pelas credenciais do seu projeto.");
+if (supabaseUrl === 'YOUR_SUPABASE_URL' || supabaseAnonKey === 'YOUR_SUPABASE_ANON_KEY') {
+    console.warn(`Supabase credentials are not set. Please update supabaseClient.ts with your project's URL and Anon key from your Supabase dashboard.`);
 }
 
-
-// Inicializa o Firebase
-const app = initializeApp(firebaseConfig);
-
-// Exporta os serviços do Firebase para serem usados em todo o aplicativo
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

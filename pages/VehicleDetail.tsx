@@ -12,7 +12,7 @@ type ViewType = 'materials' | 'tools';
 interface VehicleDetailProps {
   vehicles: Vehicle[];
   updateVehicle: (updatedVehicle: Vehicle) => Promise<void>;
-  logActivity: (log: Omit<Notification, 'id' | 'timestamp' | 'read'>) => Promise<void>;
+  logActivity: (log: Omit<Notification, 'id' | 'timestamp' | 'read' | 'created_at'>) => Promise<void>;
   notifications: Notification[];
   canEdit: boolean;
   onLogout: () => void;
@@ -57,7 +57,10 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
   
   const vehicleActivity = useMemo(() => {
     if (!vehicle) return [];
-    return notifications.filter(n => n.vehicleId === vehicle.id && n.type === 'update').slice(0, 5);
+    return notifications
+        .filter(n => n.vehicleId === vehicle.id && n.type === 'update')
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 5);
   }, [notifications, vehicle]);
 
   const filteredMaterials = useMemo(() => {
@@ -393,7 +396,7 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
                                     </div>
                                     <div className="flex-1">
                                         <p className="text-sm text-dark">{notif.message}</p>
-                                        <p className="text-xs text-slate-500 mt-1">{notif.timestamp.toDate().toLocaleString()}</p>
+                                        <p className="text-xs text-slate-500 mt-1">{new Date(notif.timestamp).toLocaleString()}</p>
                                     </div>
                                 </li>
                             ))}
