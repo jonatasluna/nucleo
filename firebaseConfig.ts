@@ -2,26 +2,22 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// As credenciais do Firebase agora são carregadas de variáveis de ambiente
-// para maior segurança. Certifique-se de criar um arquivo .env na raiz do
-// seu projeto e adicionar as chaves correspondentes.
-// Exemplo de arquivo .env:
-// API_KEY=SUA_API_KEY
-// AUTH_DOMAIN=SEU_AUTH_DOMAIN
-// ... e assim por diante
+// Cole aqui as credenciais do seu projeto Firebase.
+// Você pode encontrar essas informações no console do Firebase,
+// nas configurações do seu projeto (Project Settings > General).
 const firebaseConfig = {
-  apiKey: process.env.API_KEY,
-  authDomain: process.env.AUTH_DOMAIN,
-  projectId: process.env.PROJECT_ID,
-  storageBucket: process.env.STORAGE_BUCKET,
-  messagingSenderId: process.env.MESSAGING_SENDER_ID,
-  appId: process.env.APP_ID
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 
-// Validação para garantir que as variáveis de ambiente foram configuradas.
+// Validação para garantir que as credenciais foram substituídas.
 if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-  console.error("Configuração do Firebase está incompleta. Verifique suas variáveis de ambiente.");
+  console.error("Configuração do Firebase está incompleta. Substitua os valores de placeholder em 'firebaseConfig.ts' pelas credenciais do seu projeto.");
 }
 
 
