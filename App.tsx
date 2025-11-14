@@ -8,8 +8,35 @@ import AdminDashboard from './pages/AdminDashboard';
 import VehicleDetail from './pages/VehicleDetail';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import { ExclamationTriangleIcon } from './components/icons';
 
 const App: React.FC = () => {
+    // Check for Supabase configuration first. If the client is not initialized, show a setup guide.
+    if (!supabase) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-slate-100 p-4">
+                <div className="max-w-lg w-full text-center bg-white p-8 rounded-xl shadow-2xl border-t-4 border-red-500">
+                    <ExclamationTriangleIcon className="w-16 h-16 mx-auto text-red-500" />
+                    <h1 className="text-2xl font-bold text-dark mt-4 mb-2">Configuração Incompleta</h1>
+                    <p className="text-slate-600 mb-6">
+                        As credenciais do Supabase não foram configuradas. Para que o aplicativo funcione,
+                        é necessário inserir a URL e a chave anônima (anon key) do seu projeto.
+                    </p>
+                    <div className="bg-slate-100 p-4 rounded-lg text-left">
+                        <p className="text-sm font-semibold text-slate-800">Passos:</p>
+                        <ol className="list-decimal list-inside text-sm text-slate-700 mt-2 space-y-1">
+                            <li>Abra o arquivo <code className="bg-slate-200 text-sm p-1 rounded mx-1 font-mono">supabaseClient.ts</code> no editor.</li>
+                            <li>Substitua os valores de <code className="bg-slate-200 text-sm p-1 rounded mx-1 font-mono">YOUR_SUPABASE_URL</code> e <code className="bg-slate-200 text-sm p-1 rounded mx-1 font-mono">YOUR_SUPABASE_ANON_KEY</code>.</li>
+                        </ol>
+                         <p className="mt-3 text-xs text-slate-500">
+                            Você pode encontrar essas chaves no painel do seu projeto no site do Supabase, em <strong>Project Settings &gt; API</strong>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [currentUser, setCurrentUser] = useState<User | null>(null);

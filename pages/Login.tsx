@@ -212,17 +212,22 @@ const Login: React.FC = () => {
     }
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-slate-100 p-4">
-             <div className="w-full max-w-sm mx-auto overflow-hidden bg-white rounded-lg shadow-md">
-                <div className="p-8">
-                    {(error || message) && (
-                        <div className={`text-center text-sm p-3 rounded-md mb-6 ${error ? 'text-red-700 bg-red-100' : 'text-green-700 bg-green-100'}`}>
-                            {error || message}
-                        </div>
-                    )}
-                    {renderForm()}
+        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 p-4">
+             <main className="w-full max-w-sm mx-auto">
+                <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div className="p-8">
+                        {(error || message) && (
+                            <div className={`text-center text-sm p-3 rounded-md mb-6 ${error ? 'text-red-700 bg-red-100' : 'text-green-700 bg-green-100'}`}>
+                                {error || message}
+                            </div>
+                        )}
+                        {renderForm()}
+                    </div>
                 </div>
-            </div>
+             </main>
+            <footer className="pt-8 text-center text-sm text-slate-500">
+                Desenvolvido por Jonatas Luna - 347612
+            </footer>
         </div>
     );
 };

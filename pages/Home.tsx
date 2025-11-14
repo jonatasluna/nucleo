@@ -20,7 +20,7 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({ vehicles, currentUs
   };
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-100 flex flex-col">
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex-1 min-w-0">
@@ -34,7 +34,7 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({ vehicles, currentUs
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full">
         <div className="space-y-4">
           {vehicles.map(vehicle => {
             const isFull = vehicle.operatorIds.length >= 3;
@@ -82,6 +82,9 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({ vehicles, currentUs
           })}
         </div>
       </main>
+      <footer className="py-4 text-center text-sm text-slate-500">
+        Desenvolvido por Jonatas Luna - 347612
+      </footer>
     </div>
   );
 };

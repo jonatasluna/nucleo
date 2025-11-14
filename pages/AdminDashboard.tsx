@@ -353,7 +353,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
 
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-100 flex flex-col">
         <header className="bg-white shadow-sm sticky top-0 z-20">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
                 <div className="flex-1 min-w-0">
@@ -386,7 +386,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
             </div>
         </header>
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-10">
                     <section>
@@ -586,6 +586,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                 </aside>
             </div>
         </main>
+        <footer className="py-4 text-center text-sm text-slate-500 bg-slate-100">
+            Desenvolvido por Jonatas Luna - 347612
+        </footer>
         <VehicleModal 
             isOpen={isVehicleModalOpen}
             onClose={() => setIsVehicleModalOpen(false)}
