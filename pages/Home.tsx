@@ -6,7 +6,7 @@ import { TruckIcon, UserIcon, LogoutIcon, ChevronRightIcon } from '../components
 interface VehicleSelectionProps {
   vehicles: Vehicle[];
   currentUser: User;
-  onSelectVehicle: (userId: string, vehicleId: string) => void;
+  onSelectVehicle: (userId: string, vehicleId: string) => Promise<void>;
   onLogout: () => void;
   users: User[];
 }
@@ -14,8 +14,8 @@ interface VehicleSelectionProps {
 const VehicleSelection: React.FC<VehicleSelectionProps> = ({ vehicles, currentUser, onSelectVehicle, onLogout, users }) => {
   const navigate = useNavigate();
 
-  const handleSelect = (vehicleId: string) => {
-    onSelectVehicle(currentUser.id, vehicleId);
+  const handleSelect = async (vehicleId: string) => {
+    await onSelectVehicle(currentUser.id, vehicleId);
     navigate(`/vehicle/${vehicleId}`);
   };
 

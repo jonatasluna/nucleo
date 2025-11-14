@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export interface Material {
   id: string;
   name: string;
@@ -42,6 +44,7 @@ export interface User {
   id:string;
   username: string;
   name: string;
+  email: string;
   password?: string; // For simulation purposes
   role: 'admin' | 'operator';
   assignedVehicleId?: string; // Only for operators
@@ -52,7 +55,7 @@ export interface Notification {
   vehicleId: string;
   vehicleName: string;
   message: string;
-  timestamp: Date;
+  timestamp: Timestamp;
   type: 'update' | 'alert' | 'request';
   read: boolean;
   itemType?: 'material' | 'tool' | 'vehicle';

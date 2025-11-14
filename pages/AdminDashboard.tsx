@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Vehicle, User, Notification, VehicleType, MasterMaterial, MasterTool } from '../types';
-import { TruckIcon, BoxIcon, WrenchIcon, UserIcon, LogoutIcon, BellIcon, ExclamationTriangleIcon, PlusIcon, PencilIcon, TrashIcon, UserPlusIcon, CogIcon, ArrowPathIcon } from '../components/icons';
+import { TruckIcon, BoxIcon, WrenchIcon, UserIcon, LogoutIcon, BellIcon, ExclamationTriangleIcon, PlusIcon, PencilIcon, TrashIcon, UserPlusIcon, CogIcon, ArrowPathIcon, SearchIcon } from '../components/icons';
 import { VehicleModal } from '../components/VehicleModal';
 import { MasterItemModal } from '../components/MasterItemModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
@@ -12,22 +12,22 @@ interface AdminDashboardProps {
   users: User[];
   permissions: Record<string, boolean>;
   notifications: Notification[];
-  onPermissionChange: (userId: string, canEdit: boolean) => void;
+  onPermissionChange: (userId: string, canEdit: boolean) => Promise<void>;
   onLogout: () => void;
   currentUser: User;
-  onAssignVehicle: (userId: string, vehicleId: string | null) => void;
-  onAddVehicle: (vehicleData: { name: string; plate: string; type: VehicleType }) => void;
-  onEditVehicle: (vehicleData: Pick<Vehicle, 'id' | 'name' | 'plate' | 'type'>) => void;
+  onAssignVehicle: (userId: string, vehicleId: string | null) => Promise<void>;
+  onAddVehicle: (vehicleData: { name: string; plate: string; type: VehicleType }) => Promise<void>;
+  onEditVehicle: (vehicleData: Pick<Vehicle, 'id' | 'name' | 'plate' | 'type'>) => Promise<void>;
   masterMaterials: MasterMaterial[];
   masterTools: MasterTool[];
-  onAddMasterMaterial: (data: Omit<MasterMaterial, 'id'>) => void;
-  onEditMasterMaterial: (data: MasterMaterial) => void;
-  onDeleteMasterMaterial: (id: string) => void;
-  onAddMasterTool: (data: Omit<MasterTool, 'id'>) => void;
-  onEditMasterTool: (data: MasterTool) => void;
-  onDeleteMasterTool: (id: string) => void;
-  onApproveAccess: (notificationId: string) => void;
-  onMarkAllAsRead: () => void;
+  onAddMasterMaterial: (data: Omit<MasterMaterial, 'id'>) => Promise<void>;
+  onEditMasterMaterial: (data: MasterMaterial) => Promise<void>;
+  onDeleteMasterMaterial: (id: string) => Promise<void>;
+  onAddMasterTool: (data: Omit<MasterTool, 'id'>) => Promise<void>;
+  onEditMasterTool: (data: MasterTool) => Promise<void>;
+  onDeleteMasterTool: (id: string) => Promise<void>;
+  onApproveAccess: (notificationId: string) => Promise<void>;
+  onMarkAllAsRead: () => Promise<void>;
 }
 
 const typeColors: Record<VehicleType, string> = {
@@ -118,7 +118,7 @@ const VehicleCard: React.FC<{ vehicle: Vehicle; users: User[], onEdit: (vehicle:
 };
 
 const NotificationPanel: React.FC<{ notifications: Notification[]; onClose?: () => void }> = ({ notifications, onClose }) => {
-    const sortedNotifications = [...notifications].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    const sortedNotifications = [...notifications].sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
 
     const getIcon = (notif: Notification) => {
         switch (notif.type) {
@@ -155,7 +155,7 @@ const NotificationPanel: React.FC<{ notifications: Notification[]; onClose?: () 
                             <div className="flex-1">
                                 <p className="text-sm text-dark">{notif.message}</p>
                                 <p className="text-xs text-slate-500 mt-1">
-                                    <span className="font-medium">{notif.vehicleName}</span> - {notif.timestamp.toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' })}
+                                    <span className="font-medium">{notif.vehicleName}</span> - {notif.timestamp.toDate().toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' })}
                                 </p>
                             </div>
                         </Link>
@@ -193,7 +193,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     onMarkAllAsRead
   } = props;
   
-  const operatorUsers = users.filter(u => u.role === 'operator');
+  const [isLoading, setIsLoading] = useState(false);
   const unreadNotifications = notifications.filter(n => !n.read).length;
   
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
@@ -205,6 +205,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
   const [catalogView, setCatalogView] = useState<'materials' | 'tools'>('materials');
   const [notificationFilter, setNotificationFilter] = useState('all');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<'all' | VehicleType>('all');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
 
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -212,11 +213,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const notificationPanelRef = useRef<HTMLDivElement>(null);
 
-  const toggleNotificationPanel = () => {
+  const toggleNotificationPanel = async () => {
       const newOpenState = !isNotificationPanelOpen;
       setIsNotificationPanelOpen(newOpenState);
       if (newOpenState && unreadNotifications > 0) {
-          onMarkAllAsRead();
+          await onMarkAllAsRead();
       }
   };
 
@@ -239,6 +240,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     }
     return vehicles.filter(v => v.type === vehicleTypeFilter);
   }, [vehicles, vehicleTypeFilter]);
+  
+  const filteredOperatorUsers = useMemo(() => {
+    const operators = users.filter(u => u.role === 'operator');
+    if (!userSearchQuery) {
+        return operators;
+    }
+    return operators.filter(user =>
+        user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
+    );
+  }, [users, userSearchQuery]);
 
 
   const handleOpenAddModal = () => {
@@ -251,13 +262,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     setIsVehicleModalOpen(true);
   };
 
-  const handleSaveVehicle = (vehicleData: { name: string; plate: string; type: VehicleType } & { id?: string }) => {
-    if (editingVehicle) {
-        onEditVehicle({ ...vehicleData, id: editingVehicle.id });
-    } else {
-        onAddVehicle(vehicleData);
+  const handleSaveVehicle = async (vehicleData: { name: string; plate: string; type: VehicleType } & { id?: string }) => {
+    setIsLoading(true);
+    try {
+        if (editingVehicle) {
+            await onEditVehicle({ ...vehicleData, id: editingVehicle.id });
+        } else {
+            await onAddVehicle(vehicleData);
+        }
+    } catch (error) {
+        console.error("Failed to save vehicle:", error);
+        alert("Falha ao salvar viatura.");
+    } finally {
+        setIsLoading(false);
+        setIsVehicleModalOpen(false);
     }
-    setIsVehicleModalOpen(false);
   };
 
   const handleOpenAddMasterModal = () => {
@@ -272,17 +291,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     setIsMasterModalOpen(true);
   };
 
-  const handleSaveMasterItem = (data: { name: string, unit?: string } & { id?: string }) => {
-    if (catalogView === 'materials') {
-        const materialData = { id: data.id, name: data.name, unit: data.unit || 'unidades' };
-        if (editingMasterItem) onEditMasterMaterial(materialData as MasterMaterial);
-        else onAddMasterMaterial(materialData);
-    } else {
-        const toolData = { id: data.id, name: data.name };
-        if (editingMasterItem) onEditMasterTool(toolData as MasterTool);
-        else onAddMasterTool(toolData);
+  const handleSaveMasterItem = async (data: { name: string, unit?: string } & { id?: string }) => {
+    setIsLoading(true);
+    try {
+        if (catalogView === 'materials') {
+            const materialData = { id: data.id, name: data.name, unit: data.unit || 'unidades' };
+            if (editingMasterItem) await onEditMasterMaterial(materialData as MasterMaterial);
+            else await onAddMasterMaterial(materialData);
+        } else {
+            const toolData = { id: data.id, name: data.name };
+            if (editingMasterItem) await onEditMasterTool(toolData as MasterTool);
+            else await onAddMasterTool(toolData);
+        }
+    } catch (error) {
+        console.error("Failed to save master item:", error);
+        alert("Falha ao salvar item do catálogo.");
+    } finally {
+        setIsLoading(false);
+        setIsMasterModalOpen(false);
     }
-    setIsMasterModalOpen(false);
   }
 
   const handleDeleteMasterItem = (id: string) => {
@@ -290,17 +317,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
       setIsConfirmDeleteModalOpen(true);
   }
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
-
-    if (catalogView === 'materials') {
-      onDeleteMasterMaterial(itemToDelete);
-    } else {
-      onDeleteMasterTool(itemToDelete);
+    setIsLoading(true);
+    try {
+        if (catalogView === 'materials') {
+          await onDeleteMasterMaterial(itemToDelete);
+        } else {
+          await onDeleteMasterTool(itemToDelete);
+        }
+    } catch(error) {
+        console.error("Failed to delete master item:", error);
+        alert("Falha ao excluir item do catálogo.");
+    } finally {
+        setIsLoading(false);
+        setIsConfirmDeleteModalOpen(false);
+        setItemToDelete(null);
     }
-    
-    setIsConfirmDeleteModalOpen(false);
-    setItemToDelete(null);
   };
   
   const filteredNotifications = notifications.filter(notif =>
@@ -427,8 +460,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                     <section>
                         <h2 className="text-2xl font-semibold text-dark mb-4">Permissões e Atribuições</h2>
                         <div className="bg-white rounded-lg shadow-md">
+                             <div className="p-4 border-b border-slate-200">
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <SearchIcon className="w-5 h-5 text-slate-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar operador por nome..."
+                                        value={userSearchQuery}
+                                        onChange={(e) => setUserSearchQuery(e.target.value)}
+                                        className="block w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                                        aria-label="Buscar operadores"
+                                    />
+                                </div>
+                            </div>
                             <ul className="divide-y divide-slate-200">
-                                {operatorUsers.map(user => {
+                                {filteredOperatorUsers.length > 0 ? filteredOperatorUsers.map(user => {
                                     const canEdit = permissions[user.id] !== false;
                                     return (
                                         <li key={user.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -471,7 +519,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                                             </div>
                                         </li>
                                     );
-                                })}
+                                }) : (
+                                    <li className="p-6 text-center text-slate-500">
+                                        Nenhum operador encontrado.
+                                    </li>
+                                )}
                             </ul>
                         </div>
                     </section>
@@ -510,7 +562,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                                             <div className="flex-1">
                                                 <p className={`text-sm font-medium ${notif.type === 'alert' ? 'text-red-800' : (notif.type === 'request' ? 'text-blue-800' : 'text-dark')}`}>{notif.message}</p>
                                                 <p className="text-xs text-slate-500 mt-1">
-                                                    {notif.vehicleName} - {notif.timestamp.toLocaleString()}
+                                                    {notif.vehicleName} - {notif.timestamp.toDate().toLocaleString()}
                                                 </p>
                                                 {notif.type === 'request' && !notif.read && (
                                                     <button 

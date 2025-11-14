@@ -41,7 +41,7 @@ export const UserIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-
 export const DashboardIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
     <path d="M10.5 4.5a3 3 0 0 0-3 3v.75a.75.75 0 0 1-1.5 0v-.75a4.5 4.5 0 0 1 4.5-4.5h3a4.5 4.5 0 0 1 4.5 4.5v3a4.5 4.5 0 0 1-4.5 4.5h-.75a.75.75 0 0 1 0-1.5h.75a3 3 0 0 0 3-3v-3a3 3 0 0 0-3-3h-3Z" />
-    <path d="M3 5.25a2.25 2.25 0 0 1 2.25-2.25h3.75a.75.75 0 0 1 0 1.5H5.25a.75.75 0 0 0-.75.75v13.5a.75.75 0 0 0 .75.75h13.5a.75.75 0 0 0 .75-.75v-3.75a.75.75 0 0 1 1.5 0v3.75a2.25 2.25 0 0 1-2.25 2.25H5.25a2.25 2.25 0 0 1-2.25-2.25V5.25Z" />
+    <path d="M3 5.25a2.25 2.25 0 0 1 2.25-2.25h3.75a.75.75 0 0 1 0 1.5H5.25a.75.75 0 0 0-.75.75v13.5a.75.75 0 0 0 .75.75h13.5a.75.75 0 0 0 .75-.75v-3.75a.75.75 0 0 1 1.5 0v3.75a2.25 2.25 0 0 1-2.25-2.25H5.25a2.25 2.25 0 0 1-2.25-2.25V5.25Z" />
   </svg>
 );
 
@@ -122,5 +122,12 @@ export const UserPlusIcon: React.FC<{ className?: string }> = ({ className = "w-
 export const CogIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0 0 15 0m-15 0a7.5 7.5 0 1 1 15 0m-15 0H3m18 0h-1.5m-15 0a7.5 7.5 0 1 1 15 0m-15 0H3m18 0h-1.5m-15 0a7.5 7.5 0 1 1 15 0m-15 0H3m18 0h-1.5M12 4.5v-3m0 18v-3m3.75-12.75 2.122-2.122m-14.244 14.244 2.122-2.122M6.378 6.378l-2.122-2.122m14.244 14.244-2.122-2.122" />
+    </svg>
+);
+
+export const EnvelopeIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M1.5 8.67v8.58a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V8.67l-8.928 5.493a3 3 0 0 1-3.144 0L1.5 8.67Z" />
+        <path d="M22.5 6.908V6.75a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3v.158l9.714 5.978a1.5 1.5 0 0 0 1.572 0L22.5 6.908Z" />
     </svg>
 );

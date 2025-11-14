@@ -1,247 +1,199 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, doc, getDoc, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
+import { auth, db } from './firebaseConfig';
 import { Vehicle, User, Notification, VehicleType, MasterMaterial, MasterTool } from './types';
 import AdminDashboard from './pages/AdminDashboard';
 import VehicleDetail from './pages/VehicleDetail';
 import Login from './pages/Login';
 import Home from './pages/Home';
 
-// Mock data for initial state (used only if no saved data exists)
-const initialUsers: User[] = [
-    { id: 'u1', username: 'admin', name: 'Admin User', password: 'admin', role: 'admin' },
-    { id: 'u2', username: 'user1', name: 'João Silva', password: 'user1', role: 'operator', assignedVehicleId: 'v1' },
-    { id: 'u3', username: 'user2', name: 'Maria Oliveira', password: 'user2', role: 'operator', assignedVehicleId: 'v2' },
-    { id: 'u4', username: 'user3', name: 'Carlos Pereira', password: 'user3', role: 'operator', assignedVehicleId: 'v3' },
-];
-
-const initialVehicles: Vehicle[] = [
-  {
-    id: 'v1',
-    name: 'Viatura 01 - Alpha',
-    operatorIds: ['u2'],
-    plate: 'ABC-1234',
-    type: 'Prontidão',
-    materials: [
-      { id: 'mm1', name: 'Cabos de Fibra Óptica', quantity: 500, unit: 'metros', threshold: 100 },
-      { id: 'mm2', name: 'Conectores SC/APC', quantity: 85, unit: 'unidades', threshold: 20 },
-      { id: 'mm3', name: 'Fita Isolante', quantity: 8, unit: 'rolos', threshold: 5 },
-    ],
-    tools: [
-      { id: 'mt1', name: 'Máquina de Fusão', condition: 'Good' },
-      { id: 'mt2', name: 'Clivador de Precisão', condition: 'Good' },
-      { id: 'mt3', name: 'Alicate de Corte', condition: 'Needs Repair' },
-    ],
-    defects: [],
-  },
-  {
-    id: 'v2',
-    name: 'Viatura 02 - Bravo',
-    operatorIds: ['u3'],
-    plate: 'XYZ-5678',
-    type: 'Comercial',
-    materials: [
-      { id: 'mm1', name: 'Cabos de Fibra Óptica', quantity: 80, unit: 'metros', threshold: 100 },
-      { id: 'mm2', name: 'Conectores SC/APC', quantity: 150, unit: 'unidades', threshold: 20 },
-    ],
-    tools: [
-      { id: 'mt1', name: 'Máquina de Fusão', condition: 'Good' },
-      { id: 'mt4', name: 'Power Meter', condition: 'Good' },
-    ],
-    defects: ["Luz de freio queimada"],
-  },
-   {
-    id: 'v3',
-    name: 'Viatura 03 - Charlie',
-    operatorIds: ['u4'],
-    plate: 'QWE-9101',
-    type: 'Poda',
-    materials: [
-      { id: 'mm4', name: 'Caixa de Emenda Óptica', quantity: 12, unit: 'unidades', threshold: 5 },
-      { id: 'mm5', name: 'Protetores de Emenda', quantity: 250, unit: 'unidades', threshold: 50 },
-      { id: 'mm6', name: 'Álcool Isopropílico', quantity: 2, unit: 'litros', threshold: 1 },
-    ],
-    tools: [
-      { id: 'mt1', name: 'Máquina de Fusão', condition: 'Good' },
-      { id: 'mt5', name: 'Fonte de Luz Óptica', condition: 'Broken' },
-      { id: 'mt6', name: 'Identificador de Fibra Ativa', condition: 'Good' },
-    ],
-    defects: [],
-  },
-];
-
-const initialMasterMaterials: MasterMaterial[] = [
-    { id: 'mm1', name: 'Cabos de Fibra Óptica', unit: 'metros' },
-    { id: 'mm2', name: 'Conectores SC/APC', unit: 'unidades' },
-    { id: 'mm3', name: 'Fita Isolante', unit: 'rolos' },
-    { id: 'mm4', name: 'Caixa de Emenda Óptica', unit: 'unidades' },
-    { id: 'mm5', name: 'Protetores de Emenda', unit: 'unidades' },
-    { id: 'mm6', name: 'Álcool Isopropílico', unit: 'litros' },
-];
-
-const initialMasterTools: MasterTool[] = [
-    { id: 'mt1', name: 'Máquina de Fusão' },
-    { id: 'mt2', name: 'Clivador de Precisão' },
-    { id: 'mt3', name: 'Alicate de Corte' },
-    { id: 'mt4', name: 'Power Meter' },
-    { id: 'mt5', name: 'Fonte de Luz Óptica' },
-    { id: 'mt6', name: 'Identificador de Fibra Ativa' },
-];
-
-
 const App: React.FC = () => {
-    const [vehicles, setVehicles] = useState<Vehicle[]>(() => {
-        const saved = localStorage.getItem('app_vehicles');
-        return saved ? JSON.parse(saved) : initialVehicles;
-    });
-    const [users, setUsers] = useState<User[]>(() => {
-        const saved = localStorage.getItem('app_users');
-        return saved ? JSON.parse(saved) : initialUsers;
-    });
+    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>(() => {
-        const saved = localStorage.getItem('app_userPermissions');
-        return saved ? JSON.parse(saved) : {};
-    });
-    const [notifications, setNotifications] = useState<Notification[]>(() => {
-        const saved = localStorage.getItem('app_notifications');
-        if (saved) {
-            const parsed = JSON.parse(saved) as (Omit<Notification, 'timestamp'> & { timestamp: string })[];
-            return parsed.map(n => ({ ...n, timestamp: new Date(n.timestamp) }));
-        }
-        return [];
-    });
-    const [masterMaterials, setMasterMaterials] = useState<MasterMaterial[]>(() => {
-        const saved = localStorage.getItem('app_masterMaterials');
-        return saved ? JSON.parse(saved) : initialMasterMaterials;
-    });
-    const [masterTools, setMasterTools] = useState<MasterTool[]>(() => {
-        const saved = localStorage.getItem('app_masterTools');
-        return saved ? JSON.parse(saved) : initialMasterTools;
-    });
+    const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [masterMaterials, setMasterMaterials] = useState<MasterMaterial[]>([]);
+    const [masterTools, setMasterTools] = useState<MasterTool[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => { localStorage.setItem('app_vehicles', JSON.stringify(vehicles)); }, [vehicles]);
-    useEffect(() => { localStorage.setItem('app_users', JSON.stringify(users)); }, [users]);
-    useEffect(() => { localStorage.setItem('app_userPermissions', JSON.stringify(userPermissions)); }, [userPermissions]);
-    useEffect(() => { localStorage.setItem('app_notifications', JSON.stringify(notifications)); }, [notifications]);
-    useEffect(() => { localStorage.setItem('app_masterMaterials', JSON.stringify(masterMaterials)); }, [masterMaterials]);
-    useEffect(() => { localStorage.setItem('app_masterTools', JSON.stringify(masterTools)); }, [masterTools]);
+    useEffect(() => {
+        const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const userDocRef = doc(db, 'users', user.uid);
+                const userDocSnap = await getDoc(userDocRef);
+                if (userDocSnap.exists()) {
+                    setCurrentUser({ id: userDocSnap.id, ...userDocSnap.data() } as User);
+                } else {
+                    // This could be a new registration, App.tsx will handle creating the user doc
+                }
+            } else {
+                setCurrentUser(null);
+            }
+            setIsLoading(false);
+        });
+
+        // Setup Firestore listeners
+        const unsubVehicles = onSnapshot(collection(db, 'vehicles'), (snapshot) => {
+            const vehiclesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vehicle));
+            setVehicles(vehiclesData);
+        });
+
+        const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+            const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setUsers(usersData);
+        });
+
+        const unsubMaterials = onSnapshot(collection(db, 'masterMaterials'), (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MasterMaterial));
+            setMasterMaterials(data);
+        });
+
+        const unsubTools = onSnapshot(collection(db, 'masterTools'), (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MasterTool));
+            setMasterTools(data);
+        });
+        
+        const unsubNotifications = onSnapshot(collection(db, 'notifications'), (snapshot) => {
+             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+             setNotifications(data);
+        });
+        
+        const unsubPermissions = onSnapshot(collection(db, 'permissions'), (snapshot) => {
+             let permissionsData: Record<string, boolean> = {};
+             snapshot.docs.forEach(doc => {
+                 permissionsData[doc.id] = doc.data().canEdit;
+             });
+             setUserPermissions(permissionsData);
+        });
 
 
-    const logActivity = (log: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
-        const newNotification: Notification = {
+        return () => {
+            unsubscribeAuth();
+            unsubVehicles();
+            unsubUsers();
+            unsubMaterials();
+            unsubTools();
+            unsubNotifications();
+            unsubPermissions();
+        };
+    }, []);
+    
+
+    const logActivity = async (log: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
+        const newNotification = {
             ...log,
-            id: `notif-${Date.now()}`,
-            timestamp: new Date(),
+            timestamp: Timestamp.now(),
             read: false,
         };
-        setNotifications(prev => [newNotification, ...prev]);
+        await addDoc(collection(db, 'notifications'), newNotification);
     };
     
-    const handleMarkAllAsRead = () => {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const handleMarkAllAsRead = async () => {
+        const batch = writeBatch(db);
+        const unreadNotifs = notifications.filter(n => !n.read);
+        unreadNotifs.forEach(notif => {
+            const notifRef = doc(db, 'notifications', notif.id);
+            batch.update(notifRef, { read: true });
+        });
+        await batch.commit();
     };
 
-    const handleRequestAccess = (userId: string, vehicleId: string) => {
+    const handleRequestAccess = async (userId: string, vehicleId: string) => {
         const user = users.find(u => u.id === userId);
         const vehicle = vehicles.find(v => v.id === vehicleId);
-
         if (user && vehicle) {
-             const requestNotification: Omit<Notification, 'id' | 'timestamp' | 'read'> = {
+            await logActivity({
                 type: 'request',
                 message: `${user.name} solicitou acesso à viatura ${vehicle.name}.`,
                 vehicleId: vehicleId,
                 vehicleName: vehicle.name,
                 userId: userId,
-            };
-            logActivity(requestNotification);
+            });
         }
     };
 
-    const handleApproveAccess = (notificationId: string) => {
+    const handleApproveAccess = async (notificationId: string) => {
         const notif = notifications.find(n => n.id === notificationId);
         if (notif && notif.userId) {
-            handleAssignVehicleToUser(notif.userId, notif.vehicleId);
-
-            setNotifications(prev => prev.map(n => 
-                n.id === notificationId 
-                ? { ...n, read: true, type: 'update', message: `Acesso de ${users.find(u => u.id === notif.userId)?.name} à ${notif.vehicleName} aprovado.` } 
-                : n
-            ));
+            await handleAssignVehicleToUser(notif.userId, notif.vehicleId);
+            await updateDoc(doc(db, 'notifications', notificationId), {
+                read: true,
+                type: 'update',
+                message: `Acesso de ${users.find(u => u.id === notif.userId)?.name} à ${notif.vehicleName} aprovado.`
+            });
         }
     };
 
-    const handleUpdateVehicle = (updatedVehicle: Vehicle) => {
-        setVehicles(prevVehicles =>
-            prevVehicles.map(v => (v.id === updatedVehicle.id ? updatedVehicle : v))
-        );
+    const handleUpdateVehicle = async (updatedVehicle: Vehicle) => {
+        const vehicleRef = doc(db, 'vehicles', updatedVehicle.id);
+        await setDoc(vehicleRef, updatedVehicle, { merge: true });
     };
     
-    const handleAddVehicle = (vehicleData: { name: string; plate: string; type: VehicleType }) => {
-        const newVehicle: Vehicle = {
+    const handleAddVehicle = async (vehicleData: { name: string; plate: string; type: VehicleType }) => {
+        await addDoc(collection(db, 'vehicles'), {
             ...vehicleData,
-            id: `v-${Date.now()}`,
             operatorIds: [],
             materials: [],
             tools: [],
             defects: [],
-        };
-        setVehicles(prev => [...prev, newVehicle]);
+        });
     };
 
-    const handleEditVehicle = (vehicleData: Pick<Vehicle, 'id' | 'name' | 'plate' | 'type'>) => {
-        setVehicles(prev =>
-            prev.map(v =>
-                v.id === vehicleData.id
-                    ? { ...v, name: vehicleData.name, plate: vehicleData.plate, type: vehicleData.type }
-                    : v
-            )
-        );
+    const handleEditVehicle = async (vehicleData: Pick<Vehicle, 'id' | 'name' | 'plate' | 'type'>) => {
+        const vehicleRef = doc(db, 'vehicles', vehicleData.id);
+        await updateDoc(vehicleRef, {
+            name: vehicleData.name,
+            plate: vehicleData.plate,
+            type: vehicleData.type
+        });
     };
 
-    const handleAssignVehicleToUser = (userId: string, newVehicleId: string | null) => {
+    const handleAssignVehicleToUser = async (userId: string, newVehicleId: string | null) => {
         const userToUpdate = users.find(u => u.id === userId);
         if (!userToUpdate) return;
-
         const oldVehicleId = userToUpdate.assignedVehicleId;
-        
         if (oldVehicleId === newVehicleId) return;
 
-        if (newVehicleId) {
-            const newVehicle = vehicles.find(v => v.id === newVehicleId);
-            if (newVehicle && newVehicle.operatorIds.length >= 3 && !newVehicle.operatorIds.includes(userId)) {
-                alert(`Cannot assign to "${newVehicle.name}". The vehicle already has 3 operators.`);
-                return;
+        const batch = writeBatch(db);
+
+        // Update user's assigned vehicle
+        const userRef = doc(db, 'users', userId);
+        batch.update(userRef, { assignedVehicleId: newVehicleId || null });
+
+        // Remove from old vehicle's operators
+        if (oldVehicleId) {
+            const oldVehicleRef = doc(db, 'vehicles', oldVehicleId);
+            const oldVehicle = vehicles.find(v => v.id === oldVehicleId);
+            if(oldVehicle) {
+                batch.update(oldVehicleRef, { operatorIds: oldVehicle.operatorIds.filter(id => id !== userId) });
             }
         }
 
-        setVehicles(prevVehicles =>
-            prevVehicles.map(vehicle => {
-                if (vehicle.id === oldVehicleId) {
-                    return { ...vehicle, operatorIds: vehicle.operatorIds.filter(id => id !== userId) };
-                }
-                if (vehicle.id === newVehicleId) {
-                    // Avoid adding duplicate operator ID
-                    const newOperatorIds = vehicle.operatorIds.includes(userId) ? vehicle.operatorIds : [...vehicle.operatorIds, userId];
-                    return { ...vehicle, operatorIds: newOperatorIds };
-                }
-                return vehicle;
-            })
-        );
-
-        setUsers(prevUsers =>
-            prevUsers.map(user =>
-                user.id === userId ? { ...user, assignedVehicleId: newVehicleId || undefined } : user
-            )
-        );
+        // Add to new vehicle's operators
+        if (newVehicleId) {
+            const newVehicleRef = doc(db, 'vehicles', newVehicleId);
+            const newVehicle = vehicles.find(v => v.id === newVehicleId);
+             if (newVehicle && newVehicle.operatorIds.length >= 3 && !newVehicle.operatorIds.includes(userId)) {
+                alert(`Não é possível atribuir a "${newVehicle.name}". A viatura já tem 3 operadores.`);
+                return;
+            }
+            if(newVehicle && !newVehicle.operatorIds.includes(userId)) {
+                batch.update(newVehicleRef, { operatorIds: [...newVehicle.operatorIds, userId] });
+            }
+        }
+        await batch.commit();
     };
 
-    const handleReportDefect = (vehicleId: string, defect: string) => {
+    const handleReportDefect = async (vehicleId: string, defect: string) => {
         const vehicle = vehicles.find(v => v.id === vehicleId);
         if (vehicle && currentUser) {
             const updatedVehicle = { ...vehicle, defects: [...vehicle.defects, defect] };
-            handleUpdateVehicle(updatedVehicle);
-            logActivity({
+            await handleUpdateVehicle(updatedVehicle);
+            await logActivity({
                 type: 'alert',
                 message: `${currentUser.name} relatou uma avaria: "${defect}"`,
                 vehicleId: vehicleId,
@@ -251,14 +203,14 @@ const App: React.FC = () => {
         }
     };
 
-    const handleResolveDefect = (vehicleId: string, defectIndex: number) => {
+    const handleResolveDefect = async (vehicleId: string, defectIndex: number) => {
         const vehicle = vehicles.find(v => v.id === vehicleId);
         if (vehicle && currentUser) {
             const defectDescription = vehicle.defects[defectIndex];
             const updatedDefects = vehicle.defects.filter((_, index) => index !== defectIndex);
             const updatedVehicle = { ...vehicle, defects: updatedDefects };
-            handleUpdateVehicle(updatedVehicle);
-             logActivity({
+            await handleUpdateVehicle(updatedVehicle);
+            await logActivity({
                 type: 'update',
                 message: `${currentUser.name} resolveu a avaria: "${defectDescription}"`,
                 vehicleId: vehicleId,
@@ -267,77 +219,55 @@ const App: React.FC = () => {
             });
         }
     };
-
-    const handleLogin = (username: string, password: string): boolean => {
-        const user = users.find(u => u.username === username && u.password === password);
-        if (user) {
-            setCurrentUser(user);
-            return true;
-        }
-        return false;
-    };
-
-    const handleLogout = () => {
-        setCurrentUser(null);
-    };
     
-    const handleRegisterUser = (userData: Pick<User, 'name' | 'username' | 'password'>): { success: boolean; message: string } => {
-        if (users.some(u => u.username === userData.username)) {
-            return { success: false, message: 'Matrícula já existe. Por favor, escolha outra.' };
-        }
-        const newUser: User = {
-            ...userData,
-            id: `u-${Date.now()}`,
-            role: 'operator',
-        };
-        setUsers(prev => [...prev, newUser]);
-        return { success: true, message: 'Cadastro realizado com sucesso!' };
+    const handleLogout = async () => {
+        await signOut(auth);
     };
 
-
-    const handlePermissionChange = (userId: string, canEdit: boolean) => {
-        setUserPermissions(prev => ({ ...prev, [userId]: canEdit }));
+    const handlePermissionChange = async (userId: string, canEdit: boolean) => {
+        const permissionRef = doc(db, 'permissions', userId);
+        await setDoc(permissionRef, { canEdit });
     };
 
     // Master Catalog Handlers
-    const handleAddMasterMaterial = (data: Omit<MasterMaterial, 'id'>) => {
-        const newMasterMaterial: MasterMaterial = { ...data, id: `mm-${Date.now()}`};
-        setMasterMaterials(prev => [...prev, newMasterMaterial]);
+    const handleAddMasterMaterial = async (data: Omit<MasterMaterial, 'id'>) => {
+        await addDoc(collection(db, 'masterMaterials'), data);
+    };
+    const handleEditMasterMaterial = async (data: MasterMaterial) => {
+        await setDoc(doc(db, 'masterMaterials', data.id), data, { merge: true });
+    };
+    const handleDeleteMasterMaterial = async (id: string) => {
+        await deleteDoc(doc(db, 'masterMaterials', id));
+    };
+    const handleAddMasterTool = async (data: Omit<MasterTool, 'id'>) => {
+        await addDoc(collection(db, 'masterTools'), data);
+    };
+    const handleEditMasterTool = async (data: MasterTool) => {
+        await setDoc(doc(db, 'masterTools', data.id), data, { merge: true });
+    };
+    const handleDeleteMasterTool = async (id: string) => {
+        await deleteDoc(doc(db, 'masterTools', id));
     };
 
-    const handleEditMasterMaterial = (data: MasterMaterial) => {
-        setMasterMaterials(prev => prev.map(m => m.id === data.id ? data : m));
-    };
-
-    const handleDeleteMasterMaterial = (id: string) => {
-        setMasterMaterials(prev => prev.filter(m => m.id !== id));
-    };
-
-    const handleAddMasterTool = (data: Omit<MasterTool, 'id'>) => {
-        const newMasterTool: MasterTool = { ...data, id: `mt-${Date.now()}`};
-        setMasterTools(prev => [...prev, newMasterTool]);
-    };
-
-    const handleEditMasterTool = (data: MasterTool) => {
-        setMasterTools(prev => prev.map(t => t.id === data.id ? data : t));
-    };
-
-    const handleDeleteMasterTool = (id: string) => {
-        setMasterTools(prev => prev.filter(t => t.id !== id));
-    };
-
-
-    if (!currentUser) {
+    if (isLoading) {
+        return <div className="flex h-screen items-center justify-center">Carregando...</div>;
+    }
+    
+    if (!auth.currentUser) {
         return (
             <HashRouter>
                 <Routes>
-                    <Route path="/login" element={<Login onLogin={handleLogin} onRegister={handleRegisterUser} />} />
+                    <Route path="/login" element={<Login />} />
                     <Route path="*" element={<Navigate to="/login" />} />
                 </Routes>
             </HashRouter>
         );
     }
     
+    if (!currentUser) {
+         return <div className="flex h-screen items-center justify-center">Verificando dados do usuário...</div>;
+    }
+
     return (
         <HashRouter>
             <Routes>

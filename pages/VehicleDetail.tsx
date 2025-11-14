@@ -11,8 +11,8 @@ type ViewType = 'materials' | 'tools';
 
 interface VehicleDetailProps {
   vehicles: Vehicle[];
-  updateVehicle: (updatedVehicle: Vehicle) => void;
-  logActivity: (log: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
+  updateVehicle: (updatedVehicle: Vehicle) => Promise<void>;
+  logActivity: (log: Omit<Notification, 'id' | 'timestamp' | 'read'>) => Promise<void>;
   notifications: Notification[];
   canEdit: boolean;
   onLogout: () => void;
@@ -20,9 +20,9 @@ interface VehicleDetailProps {
   users: User[];
   masterMaterials: MasterMaterial[];
   masterTools: MasterTool[];
-  onRequestAccess: (userId: string, vehicleId: string) => void;
-  onReportDefect: (vehicleId: string, defect: string) => void;
-  onResolveDefect: (vehicleId: string, defectIndex: number) => void;
+  onRequestAccess: (userId: string, vehicleId: string) => Promise<void>;
+  onReportDefect: (vehicleId: string, defect: string) => Promise<void>;
+  onResolveDefect: (vehicleId: string, defectIndex: number) => Promise<void>;
 }
 
 const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
@@ -89,16 +89,16 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
     }
   }, [addableMaterials, addableTools]);
 
-  const handleRequestAccessClick = () => {
+  const handleRequestAccessClick = async () => {
       if (id) {
-        onRequestAccess(currentUser.id, id);
+        await onRequestAccess(currentUser.id, id);
         setRequestSent(true);
       }
   };
   
-  const handleReportDefectConfirm = (defect: string) => {
+  const handleReportDefectConfirm = async (defect: string) => {
     if (vehicle) {
-        onReportDefect(vehicle.id, defect);
+        await onReportDefect(vehicle.id, defect);
         setIsDefectModalOpen(false);
     }
   }
@@ -115,6 +115,11 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
                 <p className="mt-2 text-slate-600">
                     Você não tem permissão para acessar os detalhes desta viatura.
                 </p>
+                {requestSent && (
+                    <div className="mt-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm" role="alert">
+                        Sua solicitação foi enviada a um administrador e será analisada.
+                    </div>
+                )}
                 <div className="mt-6 w-full space-y-3">
                     <button
                         onClick={handleRequestAccessClick}
@@ -135,16 +140,17 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
      );
    }
 
-  const handleMaterialQuantityChange = (material: Material, amount: number) => {
+  const handleMaterialQuantityChange = async (material: Material, amount: number) => {
     if (!canEdit) return;
     const newQuantity = Math.max(0, material.quantity + amount);
     const updatedMaterials = vehicle.materials.map(m =>
       m.id === material.id ? { ...m, quantity: newQuantity } : m
     );
-    updateVehicle({ ...vehicle, materials: updatedMaterials });
+    
+    const updatePromise = updateVehicle({ ...vehicle, materials: updatedMaterials });
     
     const action = amount > 0 ? 'adicionou' : 'usou';
-    logActivity({
+    const logPromise = logActivity({
       type: 'update',
       message: `${currentUser.name} ${action} ${Math.abs(amount)} ${material.unit} de "${material.name}".`,
       vehicleId: vehicle.id,
@@ -152,8 +158,10 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
       itemType: 'material',
     });
 
+    await Promise.all([updatePromise, logPromise]);
+
     if (newQuantity <= material.threshold) {
-        logActivity({
+        await logActivity({
             type: 'alert',
             message: `Estoque Baixo: "${material.name}" está com ${newQuantity} ${material.unit}.`,
             vehicleId: vehicle.id,
@@ -163,22 +171,22 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
     }
   };
 
-  const handleConfirmUseMaterial = (material: Material, quantityUsed: number) => {
-    handleMaterialQuantityChange(material, -quantityUsed);
+  const handleConfirmUseMaterial = async (material: Material, quantityUsed: number) => {
+    await handleMaterialQuantityChange(material, -quantityUsed);
     closeUseModal();
   };
 
-  const handleConfirmAddStock = (material: Material, quantityAdded: number) => {
-    handleMaterialQuantityChange(material, quantityAdded);
+  const handleConfirmAddStock = async (material: Material, quantityAdded: number) => {
+    await handleMaterialQuantityChange(material, quantityAdded);
     closeAddStockModal();
   };
   
-  const handleRemoveTool = (tool: Tool) => {
+  const handleRemoveTool = async (tool: Tool) => {
     if (!canEdit) return;
     const updatedTools = vehicle.tools.filter(t => t.id !== tool.id);
-    updateVehicle({ ...vehicle, tools: updatedTools });
+    await updateVehicle({ ...vehicle, tools: updatedTools });
 
-    logActivity({
+    await logActivity({
       type: 'update',
       message: `${currentUser.name} removeu a ferramenta "${tool.name}".`,
       vehicleId: vehicle.id,
@@ -214,7 +222,7 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
     setIsAddStockModalOpen(false);
   };
 
-  const handleAddMaterial = (e: React.FormEvent) => {
+  const handleAddMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canEdit || !newMaterialData.masterId) return;
 
@@ -228,18 +236,20 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
         quantity: parseInt(newMaterialData.quantity, 10),
         threshold: parseInt(newMaterialData.threshold, 10),
     };
-    updateVehicle({ ...vehicle, materials: [...vehicle.materials, newMat] });
+    const updatePromise = updateVehicle({ ...vehicle, materials: [...vehicle.materials, newMat] });
     
-    logActivity({
+    const logPromise = logActivity({
         type: 'update',
         message: `${currentUser.name} adicionou novo material "${newMat.name}".`,
         vehicleId: vehicle.id,
         vehicleName: vehicle.name,
         itemType: 'material',
     });
+
+    await Promise.all([updatePromise, logPromise]);
     
     if (newMat.quantity <= newMat.threshold) {
-        logActivity({
+        await logActivity({
             type: 'alert',
             message: `Estoque Baixo: "${newMat.name}" está com ${newMat.quantity} ${newMat.unit}.`,
             vehicleId: vehicle.id,
@@ -250,7 +260,7 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
     closeAddModal();
   };
 
-  const handleAddTool = (e: React.FormEvent) => {
+  const handleAddTool = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canEdit || !newToolData.masterId) return;
 
@@ -262,9 +272,9 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
         name: masterTool.name,
         condition: newToolData.condition,
     };
-    updateVehicle({ ...vehicle, tools: [...vehicle.tools, newT] });
+    await updateVehicle({ ...vehicle, tools: [...vehicle.tools, newT] });
     
-    logActivity({
+    await logActivity({
         type: 'update',
         message: `${currentUser.name} adicionou nova ferramenta "${newT.name}".`,
         vehicleId: vehicle.id,
@@ -383,7 +393,7 @@ const VehicleDetail: React.FC<VehicleDetailProps> = (props) => {
                                     </div>
                                     <div className="flex-1">
                                         <p className="text-sm text-dark">{notif.message}</p>
-                                        <p className="text-xs text-slate-500 mt-1">{notif.timestamp.toLocaleString()}</p>
+                                        <p className="text-xs text-slate-500 mt-1">{notif.timestamp.toDate().toLocaleString()}</p>
                                     </div>
                                 </li>
                             ))}
