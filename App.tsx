@@ -26,7 +26,7 @@ const App: React.FC = () => {
                         <p className="text-sm font-semibold text-slate-800">Passos:</p>
                         <ol className="list-decimal list-inside text-sm text-slate-700 mt-2 space-y-1">
                             <li>Abra o arquivo <code className="bg-slate-200 text-sm p-1 rounded mx-1 font-mono">supabaseClient.ts</code> no editor.</li>
-                            <li>Substitua os valores de <code className="bg-slate-200 text-sm p-1 rounded mx-1 font-mono">YOUR_SUPABASE_URL</code> e <code className="bg-slate-200 text-sm p-1 rounded mx-1 font-mono">YOUR_SUPABASE_ANON_KEY</code>.</li>
+                            <li>Substitua os valores de <code className="bg-slate-200 text-sm p-1 rounded mx-1 font-mono">https://uhnjsibsiohkwisyemsm.supabase.co</code> e <code className="bg-slate-200 text-sm p-1 rounded mx-1 font-mono">YOUR_SUPABASE_ANON_KEY</code>.</li>
                         </ol>
                          <p className="mt-3 text-xs text-slate-500">
                             Você pode encontrar essas chaves no painel do seu projeto no site do Supabase, em <strong>Project Settings &gt; API</strong>.

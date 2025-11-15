@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "rm -rf dist && mkdir dist && esbuild index.tsx --bundle --outfile=dist/index.js --minify --sourcemap && cp index.html dist/index.html",
+    "build": "rimraf dist && esbuild index.tsx --bundle --outfile=dist/index.js --minify --sourcemap && cpx index.html dist",
     "start": "esbuild index.tsx --bundle --servedir=. --outfile=index.js"
   },
   "dependencies": {
@@ -16,6 +16,8 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "esbuild": "^0.21.4",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "rimraf": "^5.0.7",
+    "cpx": "^1.5.0"
   }
 }
