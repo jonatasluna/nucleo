@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { auth, db } from '../firebaseClient';
+import { 
+    signInWithEmailAndPassword, 
+    createUserWithEmailAndPassword, 
+    sendPasswordResetEmail,
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import { UserIcon, LockClosedIcon, EnvelopeIcon } from '../components/icons';
 
 type View = 'login' | 'register' | 'forgotPassword';
@@ -30,16 +36,19 @@ const Login: React.FC = () => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
+        if (!auth) return;
 
-        const { error } = await supabase.auth.signInWithPassword({
-            email: email,
-            password: password,
-        });
-
-        if (error) {
-            setError(error.message === 'Invalid login credentials' ? 'E-mail ou senha inválidos.' : error.message);
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+            // onAuthStateChange in App.tsx will handle navigation
+        } catch (error: any) {
+             if (error.code === 'auth/invalid-credential') {
+                 setError('E-mail ou senha inválidos.');
+             } else {
+                 setError("Ocorreu um erro. Tente novamente.");
+                 console.error(error);
+             }
         }
-        // onAuthStateChange in App.tsx will handle navigation
         setIsLoading(false);
     };
 
@@ -60,23 +69,23 @@ const Login: React.FC = () => {
         }
         setIsLoading(true);
         
-        const { data, error } = await supabase.auth.signUp({
-            email: regEmail,
-            password: regPassword,
-            options: {
-                data: {
-                    name: regName,
-                    username: regMatricula,
-                    role: 'operator' // Default role
-                }
-            }
-        });
+        if (!auth || !db) return;
+        
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, regEmail, regPassword);
+            const user = userCredential.user;
 
-        if (error) {
-            setError(error.message);
-        } else if (data.user) {
-             setMessage('Cadastro realizado! Por favor, verifique seu e-mail para confirmar sua conta.');
-             // Clear form after a delay
+            // Create user profile in Firestore
+            await setDoc(doc(db, "users", user.uid), {
+                id: user.uid,
+                email: regEmail,
+                name: regName,
+                username: regMatricula,
+                role: 'operator',
+                assignedVehicleId: null
+            });
+
+             setMessage('Cadastro realizado com sucesso! Você já pode fazer login.');
              setTimeout(() => {
                 setRegName('');
                 setRegMatricula('');
@@ -87,6 +96,13 @@ const Login: React.FC = () => {
                 setMessage('');
                 setError('');
             }, 3000);
+        } catch (error: any) {
+             if (error.code === 'auth/email-already-in-use') {
+                setError('Este e-mail já está em uso.');
+            } else {
+                setError("Ocorreu um erro no cadastro. Tente novamente.");
+                console.error(error);
+            }
         }
         setIsLoading(false);
     };
@@ -96,15 +112,14 @@ const Login: React.FC = () => {
         setError('');
         setMessage('');
         setIsLoading(true);
+        if (!auth) return;
         
-        const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-            redirectTo: window.location.origin, // URL to redirect to after password reset
-        });
-
-        if (error) {
-            setError(error.message);
-        } else {
+        try {
+            await sendPasswordResetEmail(auth, forgotEmail);
             setMessage('Se uma conta com este e-mail existir, um link de redefinição foi enviado.');
+        } catch (error: any) {
+            setError("Ocorreu um erro. Tente novamente.");
+            console.error(error);
         }
         setIsLoading(false);
     };
